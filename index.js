@@ -48,11 +48,12 @@
       }, {stream: false, preventMenu: true})
       console.log("Step 1 result:", step1Result.result)
 
+      /* Commented out per Mohit's Email
       try { JSON.parse(step1Result.result) } catch (e) {
         handlePipelineError("Step 1 returned invalid JSON:", e)
         return
       }
-
+      */
       // Agent 2: Select exercise, verify correctness, classify, and diagnose
       const step2Result = await codioIDE.coachBot.ask({
         systemPrompt: "You are an assistant that analyzes student code to select, verify, classify, and diagnose exercises. Return only valid JSON.",
@@ -64,11 +65,13 @@
       }, {stream: false, preventMenu: true})
       console.log("Step 2 result:", step2Result.result)
 
+      /* Commented out per Mohit's Email
       try { JSON.parse(step2Result.result) } catch (e) {
         handlePipelineError("Step 2 returned invalid JSON:", e)
         return
       }
-
+      */
+      
       codioIDE.coachBot.hideThinkingAnimation()
       // Agent 3: Construct the hint (no INSTRUCTOR_VIEW to prevent solution leakage)
       const step3Result = await codioIDE.coachBot.ask({
