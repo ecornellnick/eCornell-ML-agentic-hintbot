@@ -1,91 +1,175 @@
-// Wrapping the whole extension in a JS function 
-// (ensures all global variables set in this extension cannot be referenced outside its scope)
+// Jupyter hint coach extension using shared Step 1
 (async function(codioIDE, window) {
+  codioIDE.coachBot.register(
+    "customHintsJupyterML",
+    "ML hint button",
+    onButtonPress
+  );
 
-  // register(id: unique button id, name: name of button visible in Coach, function: function to call when button is clicked) 
-  codioIDE.coachBot.register("customHintsJupyterML", "ML hint button", onButtonPress)
-
-  // function called when I have a question button is pressed
   async function onButtonPress() {
-
-    codioIDE.coachBot.showThinkingAnimation()
-
-    // automatically collects all available context 
-    let context = await codioIDE.coachBot.getContext()
-    // console.log(context)
-    
-    // select open jupyterlab notebook related context
-    let openJupyterFileContext = context.jupyterContext[0]
-    // let jupyterFileName = openJupyterFileContext.path
-    let jupyterFileContent = openJupyterFileContext.content
-    
-    // filter and map cell indices of code and markdown cells into a new array
-    const markdownAndCodeCells = jupyterFileContent.map(
-        ({ id, ...rest }, index) => ({
-              cell: index,
-            ...rest
-        })).filter(
-            obj => obj.type === 'markdown' || obj.type === 'code'
-        )
-    const str_student_jupyter = JSON.stringify(markdownAndCodeCells)
-    console.log("code and markdown", str_student_jupyter)
-
-    function handlePipelineError(label, e) {
-      console.error(label, e)
-      codioIDE.coachBot.hideThinkingAnimation()
-      codioIDE.coachBot.write("I'm having trouble analyzing your notebook right now. Please try clicking the hint button again.")
-      codioIDE.coachBot.showMenu()
-    }
+    codioIDE.coachBot.showThinkingAnimation();
 
     try {
-      // Agent 1: Locate exercises and determine status
+      const context = await codioIDE.coachBot.getContext();
+      const environmentGuidance = await loadEnvironmentGuidance();
+      const notebookContext = getNotebookContext(context);
+      const studentNotebook = serializeNotebookContext(notebookContext);
+      const guideInstructions = getGuideInstructions(context);
+      const workedExample = getWorkedExample(context);
+
       const step1Result = await codioIDE.coachBot.ask({
-        systemPrompt: "You are an assistant that locates exercises in Jupyter notebooks and determines their status. Return only valid JSON.",
-        userPrompt: "{% prompt 'AGENT_STEP_1_LOCATE' %}",
+        systemPrompt: "You locate notebook tasks and determine NOT_STARTED vs HAS_ATTEMPTED. Return only valid JSON.",
+        userPrompt: "{% prompt 'AGENT_STEP_1_LOCATE_TASKS' %}",
         vars: {
-          "JUPYTER_NOTEBOOK": str_student_jupyter,
+          CONTEXT_TYPE: "notebook",
+          STUDENT_CONTEXT: studentNotebook,
+          INSTRUCTOR_REFERENCE: "",
+          GUIDE_INSTRUCTIONS: guideInstructions,
+          WORKED_EXAMPLE: workedExample,
+          EDITABLE_TARGETS: JSON.stringify({
+            type: "cells",
+            source_path: notebookContext ? notebookContext.path || null : null
+          }),
+          TASK_BOUNDARY_HINTS: JSON.stringify({
+            student_markers: [
+              "# YOUR CODE HERE",
+              "# END OF YOUR CODE",
+              "# TODO",
+              "# BEGIN STUDENT CODE",
+              "## Your code here",
+              "-- YOUR CODE HERE",
+              "-- END OF YOUR CODE"
+            ],
+            solution_markers: [
+              "### BEGIN SOLUTION",
+              "### END SOLUTION"
+            ],
+            header_patterns: [
+              "Part",
+              "Exercise",
+              "Step",
+              "Question",
+              "[Graded]",
+              "Task",
+              "Problem"
+            ]
+          }),
+          ASSESSMENT_CONTEXT: JSON.stringify({
+            opened_resource: notebookContext ? notebookContext.path || "notebook" : "notebook"
+          }),
+          ENVIRONMENT_GUIDANCE: JSON.stringify(environmentGuidance)
         }
-      }, {stream: false, preventMenu: true})
-      console.log("Step 1 result:", step1Result.result)
+      }, { stream: false, preventMenu: true });
 
-      /* Commented out per Mohit's Email
-      try { JSON.parse(step1Result.result) } catch (e) {
-        handlePipelineError("Step 1 returned invalid JSON:", e)
-        return
-      }
-      */
-      // Agent 2: Select exercise, verify correctness, classify, and diagnose
       const step2Result = await codioIDE.coachBot.ask({
-        systemPrompt: "You are an assistant that analyzes student code to select, verify, classify, and diagnose exercises. Return only valid JSON.",
-        userPrompt: "{% prompt 'AGENT_STEP_2_ANALYZE' %}",
+        systemPrompt: "You analyze notebook student work, select a task, and diagnose it. Return only valid JSON.",
+        userPrompt: "{% prompt 'AGENT_STEP_2_ANALYZE_JUPYTER_V2' %}",
         vars: {
-          "JUPYTER_NOTEBOOK": str_student_jupyter,
-          "STEP_1": step1Result.result,
+          CONTEXT_TYPE: "notebook",
+          STUDENT_CONTEXT: studentNotebook,
+          INSTRUCTOR_REFERENCE: "",
+          GUIDE_INSTRUCTIONS: guideInstructions,
+          WORKED_EXAMPLE: workedExample,
+          EDITABLE_TARGETS: JSON.stringify({
+            type: "cells",
+            source_path: notebookContext ? notebookContext.path || null : null
+          }),
+          TASK_BOUNDARY_HINTS: JSON.stringify({
+            solution_markers: [
+              "### BEGIN SOLUTION",
+              "### END SOLUTION"
+            ]
+          }),
+          ASSESSMENT_CONTEXT: JSON.stringify({
+            opened_resource: notebookContext ? notebookContext.path || "notebook" : "notebook"
+          }),
+          ENVIRONMENT_GUIDANCE: JSON.stringify(environmentGuidance),
+          STEP_1: step1Result.result
         }
-      }, {stream: false, preventMenu: true})
-      console.log("Step 2 result:", step2Result.result)
+      }, { stream: false, preventMenu: true });
 
-      /* Commented out per Mohit's Email
-      try { JSON.parse(step2Result.result) } catch (e) {
-        handlePipelineError("Step 2 returned invalid JSON:", e)
-        return
-      }
-      */
-      
-      codioIDE.coachBot.hideThinkingAnimation()
-      // Agent 3: Construct the hint (no INSTRUCTOR_VIEW to prevent solution leakage)
-      const step3Result = await codioIDE.coachBot.ask({
-        systemPrompt: "You are an assistant that constructs helpful, well-calibrated hints for students. Return only plain text.",
-        userPrompt: "{% prompt 'AGENT_STEP_3_HINT' %}",
+      codioIDE.coachBot.hideThinkingAnimation();
+
+      await codioIDE.coachBot.ask({
+        systemPrompt: "You construct one helpful, well-calibrated notebook hint. Return only plain text.",
+        userPrompt: "{% prompt 'AGENT_STEP_3_HINT_JUPYTER_V2' %}",
         vars: {
-          "JUPYTER_NOTEBOOK": str_student_jupyter,
-          "STEP_1": step1Result.result,
-          "STEP_2": step2Result.result,
+          STUDENT_CONTEXT: studentNotebook,
+          GUIDE_INSTRUCTIONS: guideInstructions,
+          WORKED_EXAMPLE: workedExample,
+          STEP_1: step1Result.result,
+          STEP_2: step2Result.result
         }
-      })
-    } catch (e) {
-      handlePipelineError("Hint pipeline error:", e)
+      });
+    } catch (error) {
+      handlePipelineError(error);
     }
   }
 
-})(window.codioIDE, window)
+  async function loadEnvironmentGuidance() {
+    try {
+      const response = await fetch("step1_environment_guidance_jupyter.json");
+      if (!response.ok) {
+        throw new Error("Unable to load step1 environment guidance");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Guidance load error:", error);
+      return {
+        context_type: "notebook",
+        fallback: true,
+        note: "No external environment guidance could be loaded."
+      };
+    }
+  }
+
+  function getNotebookContext(context) {
+    if (context && Array.isArray(context.jupyterContext) && context.jupyterContext.length > 0) {
+      return context.jupyterContext[0];
+    }
+    return null;
+  }
+
+  function serializeNotebookContext(notebookContext) {
+    if (!notebookContext || !Array.isArray(notebookContext.content)) {
+      return "[]";
+    }
+
+    const markdownAndCodeCells = notebookContext.content
+      .map(function(cell, index) {
+        const clone = Object.assign({}, cell);
+        delete clone.id;
+        clone.cell = index;
+        return clone;
+      })
+      .filter(function(cell) {
+        return cell.type === "markdown" || cell.type === "code";
+      });
+
+    return JSON.stringify(markdownAndCodeCells);
+  }
+
+  function getGuideInstructions(context) {
+    if (context && context.guidesPage && typeof context.guidesPage.content === "string") {
+      return context.guidesPage.content;
+    }
+    return "";
+  }
+
+  function getWorkedExample(context) {
+    if (context && context.guidesPage && typeof context.guidesPage.content === "string") {
+      const title = String(context.guidesPage.title || "").toLowerCase();
+      if (title.includes("example") || title.includes("walkthrough")) {
+        return context.guidesPage.content;
+      }
+    }
+    return "";
+  }
+
+  function handlePipelineError(error) {
+    console.error("Jupyter hint pipeline error:", error);
+    codioIDE.coachBot.hideThinkingAnimation();
+    codioIDE.coachBot.write("I'm having trouble analyzing your notebook right now. Please try clicking the hint button again.");
+    codioIDE.coachBot.showMenu();
+  }
+})(window.codioIDE, window);
