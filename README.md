@@ -76,3 +76,39 @@ The INSTRUCTOR_VIEW variable (`*.ipynb`) is automatically injected by Codio for 
 INSTRUCTOR_VIEW by design.
 
 `prompts/teds-prompt.md` is the original prompt, kept for reference. It is not used in the pipeline.
+
+
+## UPDATED 3/31/2026
+# Jupyter Hint Coach
+
+This is the migrated Jupyter workflow using the generalized Step 1 contract.
+
+## Pipeline
+
+1. `AGENT_STEP_1_LOCATE_TASKS`
+   - Shared prompt
+   - Receives generalized notebook context plus injected Jupyter environment guidance
+2. `AGENT_STEP_2_ANALYZE_JUPYTER_V2`
+   - Jupyter-specific analysis prompt
+   - Consumes `STEP_1.tasks`
+3. `AGENT_STEP_3_HINT_JUPYTER_V2`
+   - Jupyter-specific response prompt
+   - Consumes the revised Step 2 schema
+
+## Files
+
+- [index.js](/Users/tblanchard/Codex%20Projects/Coding%20Coach%20Prompts/02%20Workflow%20Files/Jupyter/Extension%20files/index.js)
+- [metadata.json](/Users/tblanchard/Codex%20Projects/Coding%20Coach%20Prompts/02%20Workflow%20Files/Jupyter/Extension%20files/metadata.json)
+- [step1_environment_guidance_jupyter.json](/Users/tblanchard/Codex%20Projects/Coding%20Coach%20Prompts/02%20Workflow%20Files/Jupyter/Extension%20files/step1_environment_guidance_jupyter.json)
+
+## Required Prompt IDs
+
+- `AGENT_STEP_1_LOCATE_TASKS`
+- `AGENT_STEP_2_ANALYZE_JUPYTER_V2`
+- `AGENT_STEP_3_HINT_JUPYTER_V2`
+
+## Notes
+
+The extension passes `INSTRUCTOR_REFERENCE` as an empty string and relies on the
+shared Step 1 prompt's notebook fallback to use `INSTRUCTOR_VIEW` when needed.
+
