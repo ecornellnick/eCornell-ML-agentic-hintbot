@@ -138,7 +138,12 @@
     const markdownAndCodeCells = notebookContext.content
       .map(function(cell, index) {
         const clone = Object.assign({}, cell);
+        const normalizedType = clone.type || clone.cell_type || null;
         delete clone.id;
+        delete clone.outputs;
+        delete clone.execution_count;
+        delete clone.attachments;
+        clone.type = normalizedType;
         clone.cell = index;
         return clone;
       })
