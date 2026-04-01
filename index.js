@@ -215,7 +215,8 @@
           })
         }
       }, { stream: false, preventMenu: true });
-      console.info("[Jupyter Hint] step1:success", summarizeCoachResult(step1Result));
+      const step1Json = normalizeCoachJson(step1Result, "step1");
+      console.info("[Jupyter Hint] step1:success", summarizeCoachResult(step1Json));
 
       console.info("[Jupyter Hint] step2:start");
       const step2Result = await codioIDE.coachBot.ask({
@@ -241,10 +242,11 @@
             opened_resource: notebookContext ? notebookContext.path || "notebook" : "notebook"
           }),
           ENVIRONMENT_GUIDANCE: JSON.stringify(environmentGuidance),
-          STEP_1: step1Result.result
+          STEP_1: step1Json
         }
       }, { stream: false, preventMenu: true });
-      console.info("[Jupyter Hint] step2:success", summarizeCoachResult(step2Result));
+      const step2Json = normalizeCoachJson(step2Result, "step2");
+      console.info("[Jupyter Hint] step2:success", summarizeCoachResult(step2Json));
 
       codioIDE.coachBot.hideThinkingAnimation();
 
@@ -256,8 +258,8 @@
           STUDENT_CONTEXT: studentNotebook,
           GUIDE_INSTRUCTIONS: guideInstructions,
           WORKED_EXAMPLE: workedExample,
-          STEP_1: step1Result.result,
-          STEP_2: step2Result.result
+          STEP_1: step1Json,
+          STEP_2: step2Json
         }
       });
       console.info("[Jupyter Hint] step3:success");
@@ -339,12 +341,60 @@
   }
 
   function summarizeCoachResult(result) {
-    const raw = result && typeof result.result === "string" ? result.result : "";
+    const raw = typeof result === "string"
+      ? result
+      : result && typeof result.result === "string"
+        ? result.result
+        : "";
     return {
       hasResult: !!raw,
       resultChars: raw.length,
       preview: raw.slice(0, 200)
     };
+  }
+
+  function normalizeCoachJson(result, label) {
+    const raw = result && typeof result.result === "string" ? result.result : "";
+    const extracted = extractJsonObject(raw);
+
+    if (!extracted) {
+      throw new Error("Unable to extract JSON from " + label + " result.");
+    }
+
+    try {
+      const parsed = JSON.parse(extracted);
+      const normalized = JSON.stringify(parsed);
+      console.info("[Jupyter Hint] " + label + ":normalized", {
+        rawChars: raw.length,
+        jsonChars: normalized.length
+      });
+      return normalized;
+    } catch (error) {
+      console.error("[Jupyter Hint] " + label + ":json-parse-failed", {
+        message: error && error.message ? error.message : null,
+        preview: raw.slice(0, 400)
+      });
+      throw error;
+    }
+  }
+
+  function extractJsonObject(raw) {
+    if (!raw || typeof raw !== "string") {
+      return null;
+    }
+
+    const fencedMatch = raw.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (fencedMatch && fencedMatch[1]) {
+      return fencedMatch[1].trim();
+    }
+
+    const firstBrace = raw.indexOf("{");
+    const lastBrace = raw.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      return raw.slice(firstBrace, lastBrace + 1).trim();
+    }
+
+    return null;
   }
 
   function handlePipelineError(error) {
