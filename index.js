@@ -285,15 +285,25 @@
 
     const markdownAndCodeCells = notebookContext.content
       .map(function(cell, index) {
-        const clone = Object.assign({}, cell);
-        const normalizedType = clone.type || clone.cell_type || null;
-        delete clone.id;
-        delete clone.outputs;
-        delete clone.execution_count;
-        delete clone.attachments;
-        clone.type = normalizedType;
-        clone.cell = index;
-        return clone;
+        const normalizedType = cell.type || cell.cell_type || null;
+        const normalizedSource = Array.isArray(cell.source)
+          ? cell.source.join("")
+          : typeof cell.source === "string"
+            ? cell.source
+            : "";
+        const minimalCell = {
+          cell: index,
+          type: normalizedType,
+          source: normalizedSource
+        };
+
+        if (cell.metadata && cell.metadata.nbgrader) {
+          minimalCell.metadata = {
+            nbgrader: cell.metadata.nbgrader
+          };
+        }
+
+        return minimalCell;
       })
       .filter(function(cell) {
         return cell.type === "markdown" || cell.type === "code";
