@@ -182,8 +182,6 @@
           CONTEXT_TYPE: "notebook",
           STUDENT_CONTEXT: studentNotebook,
           INSTRUCTOR_REFERENCE: "",
-          GUIDE_INSTRUCTIONS: guideInstructions,
-          WORKED_EXAMPLE: workedExample,
           EDITABLE_TARGETS: JSON.stringify({
             type: "cells",
             source_path: notebookContext ? notebookContext.path || null : null
@@ -214,8 +212,7 @@
           }),
           ASSESSMENT_CONTEXT: JSON.stringify({
             opened_resource: notebookContext ? notebookContext.path || "notebook" : "notebook"
-          }),
-          ENVIRONMENT_GUIDANCE: JSON.stringify(environmentGuidance)
+          })
         }
       }, { stream: false, preventMenu: true });
       console.info("[Jupyter Hint] step1:success", summarizeCoachResult(step1Result));
