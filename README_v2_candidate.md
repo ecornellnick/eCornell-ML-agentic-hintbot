@@ -30,8 +30,12 @@ This candidate uses:
 
 This candidate workflow uses:
 
-- `index_v2_candidate.js`
+- `index.js`
 - `metadata.json`
+
+The previous production entry file is preserved as:
+
+- `index_ORIG.js`
 
 It does not depend on:
 
@@ -87,8 +91,9 @@ Recommended comparison notebooks include:
 
 If testing passes and this candidate is approved to replace the current Jupyter workflow:
 
-1. Replace the live extension entry file with `index_v2_candidate.js`
-   - rename it to `index.js` in the production extension bundle, or copy its contents into the production `index.js`
+1. Keep the candidate implementation as the live extension entry file:
+   - `index.js`
+   - preserve the prior production version as `index_ORIG.js`
 
 2. Update the helper/button identity in the extension code:
    - change `customHintsJupyterMLv2` to `customHintsJupyterML`
