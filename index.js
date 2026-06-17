@@ -31,7 +31,8 @@
       }
 
       const studentNotebook = serializeNotebookContext(notebookContext);
-      const guideInstructions = getGuideInstructions(context);
+      const rawGuideInstructions = getRawGuideInstructions(context);
+      const guideInstructions = trimGuideInstructions(rawGuideInstructions);
 
       console.info("[Jupyter Hint v2] locator:start", {
         cellCount: Array.isArray(studentNotebook) ? studentNotebook.length : 0
@@ -53,6 +54,7 @@
       console.info("[Jupyter Hint v2] coach:start", {
         notebookPath: notebookContext ? notebookContext.path || null : null,
         taskCount: tasks.length,
+        rawGuideInstructionChars: rawGuideInstructions.length,
         guideInstructionChars: guideInstructions.length
       });
       const coachResult = await codioIDE.coachBot.ask({
@@ -119,11 +121,53 @@
       });
   }
 
-  function getGuideInstructions(context) {
+  function getRawGuideInstructions(context) {
     if (context && context.guidesPage && typeof context.guidesPage.content === "string") {
       return context.guidesPage.content;
     }
     return "";
+  }
+
+  function trimGuideInstructions(raw) {
+    if (!raw || typeof raw !== "string") {
+      return "";
+    }
+
+    const normalized = raw.replace(/\r\n?/g, "\n").trim();
+    if (!normalized) {
+      return "";
+    }
+
+    const blocks = normalized
+      .split(/\n{2,}/)
+      .map(function(block) {
+        return block.trim();
+      })
+      .filter(Boolean);
+
+    const keywordPattern = /# YOUR CODE HERE|auto-graded|auto grader|autograder|do not change|provided functions|provided variables|run all|execute all|graded|notebook/i;
+    const selectedBlocks = [];
+    const seen = new Set();
+
+    blocks.slice(0, 3).forEach(function(block) {
+      if (!seen.has(block)) {
+        selectedBlocks.push(block);
+        seen.add(block);
+      }
+    });
+
+    blocks.forEach(function(block) {
+      if (selectedBlocks.length >= 6) {
+        return;
+      }
+      if (keywordPattern.test(block) && !seen.has(block)) {
+        selectedBlocks.push(block);
+        seen.add(block);
+      }
+    });
+
+    const trimmed = selectedBlocks.join("\n\n");
+    return trimmed.length > 2000 ? trimmed.slice(0, 2000) : trimmed;
   }
 
   // ---------------------------------------------------------------------------
