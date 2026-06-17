@@ -4,8 +4,8 @@
 //   1. AGENT_LOCATOR_COACH receives the student notebook (Codio runtime
 //      shape: {type, content, id} per cell, no nbgrader metadata) and emits
 //      the TASKS_JSON array.
-//   2. AGENT_COACH_V2 receives that array plus the guide page and emits a
-//      hint after verifying tasks against NOTEBOOK_INSTRUCTOR_VIEW.
+//   2. AGENT_COACH_V2 receives that array and emits a hint after verifying
+//      tasks against NOTEBOOK_INSTRUCTOR_VIEW.
 //
 // All previous deterministic-locator JS has been removed -- it depended on
 // nbgrader metadata that Codio's getContext() does not preserve at runtime.
@@ -31,8 +31,6 @@
       }
 
       const studentNotebook = serializeNotebookContext(notebookContext);
-      const rawGuideInstructions = getRawGuideInstructions(context);
-      const guideInstructions = trimGuideInstructions(rawGuideInstructions);
 
       console.info("[Jupyter Hint v2] locator:start", {
         cellCount: Array.isArray(studentNotebook) ? studentNotebook.length : 0
@@ -51,18 +49,18 @@
         throw new Error("Locator returned zero tasks. Cannot proceed.");
       }
 
+      const tasksJson = JSON.stringify(tasks);
+
       console.info("[Jupyter Hint v2] coach:start", {
         notebookPath: notebookContext ? notebookContext.path || null : null,
         taskCount: tasks.length,
-        rawGuideInstructionChars: rawGuideInstructions.length,
-        guideInstructionChars: guideInstructions.length
+        tasksJsonChars: tasksJson.length
       });
       const coachResult = await codioIDE.coachBot.ask({
         systemPrompt: "You analyze pre-located notebook tasks, select one, classify it, and produce a single hint. Return only valid JSON.",
         userPrompt: "{% prompt 'AGENT_COACH_JUPYTER_V2' %}",
         vars: {
-          TASKS_JSON: JSON.stringify(tasks),
-          GUIDE_INSTRUCTIONS: guideInstructions
+          TASKS_JSON: tasksJson
         }
       }, { stream: false, preventMenu: true });
       const parsed = parseCoachResponse(coachResult);
@@ -119,55 +117,6 @@
       .filter(function(cell) {
         return cell.type === "markdown" || cell.type === "code";
       });
-  }
-
-  function getRawGuideInstructions(context) {
-    if (context && context.guidesPage && typeof context.guidesPage.content === "string") {
-      return context.guidesPage.content;
-    }
-    return "";
-  }
-
-  function trimGuideInstructions(raw) {
-    if (!raw || typeof raw !== "string") {
-      return "";
-    }
-
-    const normalized = raw.replace(/\r\n?/g, "\n").trim();
-    if (!normalized) {
-      return "";
-    }
-
-    const blocks = normalized
-      .split(/\n{2,}/)
-      .map(function(block) {
-        return block.trim();
-      })
-      .filter(Boolean);
-
-    const keywordPattern = /# YOUR CODE HERE|auto-graded|auto grader|autograder|do not change|provided functions|provided variables|run all|execute all|graded|notebook/i;
-    const selectedBlocks = [];
-    const seen = new Set();
-
-    blocks.slice(0, 3).forEach(function(block) {
-      if (!seen.has(block)) {
-        selectedBlocks.push(block);
-        seen.add(block);
-      }
-    });
-
-    blocks.forEach(function(block) {
-      if (selectedBlocks.length >= 6) {
-        return;
-      }
-      if (keywordPattern.test(block) && !seen.has(block)) {
-        selectedBlocks.push(block);
-        seen.add(block);
-      }
-    });
-
-    const trimmed = selectedBlocks.join("\n\n");
-    return trimmed.length > 2000 ? trimmed.slice(0, 2000) : trimmed;
   }
 
   // ---------------------------------------------------------------------------
