@@ -61,7 +61,7 @@ It does not use the current production Jupyter prompt IDs:
 For safe staged testing, this version keeps a temporary helper/button identity:
 
 - helper id: `customHintsJupyterMLv2`
-- button label: `ML hint button (v2)`
+- button label: `ML Hint 6/17/26`
 
 This avoids clobbering the current live Jupyter Hint Coach during testing.
 

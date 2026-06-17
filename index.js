@@ -13,7 +13,7 @@
 
   codioIDE.coachBot.register(
     "customHintsJupyterMLv2",
-    "ML hint button (v2)",
+    "ML Hint 6/17/26",
     onButtonPress
   );
 
